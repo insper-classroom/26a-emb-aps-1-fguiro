@@ -2,199 +2,142 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
-#include "tft_lcd_ili9341/gfx/gfx_ili9341.h"
-#include "tft_lcd_ili9341/ili9341/ili9341.h"
-#include "tft_lcd_ili9341/touch_resistive/touch_resistive.h"
+// #include "ganhou.h"
+// #include "perdeu.h"
+// #include "tom_amarelo.h"
+// #include "tom_azul.h"
+// #include "tom_verde.h"
+// #include "tom_vermelho.h"
 
-#include "../image_bitmap2.h"
+#include "pinos.h"
 
-// Propriedades do LCD
-#define SCREEN_ROTATION 1
-#define SCREEN_W 320
-#define SCREEN_H 240
+// ─── Sequência fixa ───────────────────────────────────────────────────────────
+#define MAX_SEQ 5
+const int sequence[MAX_SEQ] = {0, 1, 2, 3, 0};
 
-// Pinos do motor de passos
-#define FASE1_PIN 2
-#define FASE2_PIN 3
-#define FASE3_PIN 4
-#define FASE4_PIN 5
+// ─── Estado global ────────────────────────────────────────────────────────────
+typedef enum { 
+    SHOW_SEQUENCE, 
+    WAIT_INPUT, 
+    GAME_OVER
+} GameState;
 
-// Posições dos botões na tela
-#define CCW_BTN_X  20
-#define CCW_BTN_Y  70
-#define CCW_BTN_W  105
-#define CCW_BTN_H  99
+volatile int btn_flag    = -1;
+GameState    state       = SHOW_SEQUENCE;
+int          phase       = 1;
+int          input_index = 0;
 
-#define CW_BTN_X   200
-#define CW_BTN_Y   65
-#define CW_BTN_W   103
-#define CW_BTN_H   110
+// ─── Helpers de LED ───────────────────────────────────────────────────────────
+void led_on(int color)  { gpio_put(LED_PINS[color], 1); }
+void led_off(int color) { gpio_put(LED_PINS[color], 0); }
+void all_leds_off(void) { for (int i = 0; i < NUM_COLORS; i++) led_off(i); }
 
-// Centro da animação (entre os dois botões)
-#define ANIM_X     155
-#define ANIM_Y     120
-#define ANIM_SIZE  20
-#define ANIM_THICK 6
-
-// Desenha os dois botões de seta na tela
-void drawButtons(void) {
-    gfx_drawBitmap(CW_BTN_X,  CW_BTN_Y,  image_horario_bits,       CW_BTN_W,  CW_BTN_H,  0x07E0);
-    gfx_drawBitmap(CCW_BTN_X, CCW_BTN_Y, image_anti_horario_bits, CCW_BTN_W, CCW_BTN_H, 0x07E0);
-}
-
-// Limpa a área da animação
-void clearAnim(void) {
-    gfx_fillRect(ANIM_X - ANIM_SIZE - 2, ANIM_Y - ANIM_SIZE - 2,
-                 (ANIM_SIZE + 2) * 2, (ANIM_SIZE + 2) * 2, 0x0000);
-}
-
-// Desenha um frame da animação (ponteiro girando)
-// frame 0=cima, 1=direita, 2=baixo, 3=esquerda
-void drawAnimFrame(int frame, uint16_t color) {
-    clearAnim();
-    int f = frame % 4;
-    switch (f) {
-        case 0:
-            gfx_fillRect(ANIM_X - ANIM_THICK/2, ANIM_Y - ANIM_SIZE,
-                         ANIM_THICK, ANIM_SIZE, color);
-            break;
-        case 1:
-            gfx_fillRect(ANIM_X, ANIM_Y - ANIM_THICK/2,
-                         ANIM_SIZE, ANIM_THICK, color);
-            break;
-        case 2:
-            gfx_fillRect(ANIM_X - ANIM_THICK/2, ANIM_Y,
-                         ANIM_THICK, ANIM_SIZE, color);
-            break;
-        case 3:
-            gfx_fillRect(ANIM_X - ANIM_SIZE, ANIM_Y - ANIM_THICK/2,
-                         ANIM_SIZE, ANIM_THICK, color);
-            break;
+void all_leds_blink(int times) {
+    for (int i = 0; i < times; i++) {
+        for (int c = 0; c < NUM_COLORS; c++) led_on(c);
+        sleep_ms(300);
+        all_leds_off();
+        sleep_ms(300);
     }
 }
 
-// Um passo do motor sentido horário
-void stepMotorCW(void) {
-    gpio_put(FASE1_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE1_PIN, 0);
-    gpio_put(FASE2_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE2_PIN, 0);
-    gpio_put(FASE3_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE3_PIN, 0);
-    gpio_put(FASE4_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE4_PIN, 0);
+// ─── Funções de cor, ganhou e perdeu ──────────────────────────────────────────
+void play_color(int color) {
+    led_on(color);
+    // audio_play(AUDIO_DATA[color], AUDIO_LEN[color]);
+    sleep_ms(500);  // simula duração do som
+    led_off(color);
+    sleep_ms(80);
 }
 
-// Um passo do motor sentido anti-horário
-void stepMotorCCW(void) {
-    gpio_put(FASE4_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE4_PIN, 0);
-    gpio_put(FASE3_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE3_PIN, 0);
-    gpio_put(FASE2_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE2_PIN, 0);
-    gpio_put(FASE1_PIN, 1);
-    sleep_ms(2);
-    gpio_put(FASE1_PIN, 0);
+void play_lose(void) {
+    all_leds_blink(4);
+    // audio_play(PERDEU_DATA, PERDEU_LENGTH);
 }
 
-void stopMotor(void) {
-    gpio_put(FASE1_PIN, 0);
-    gpio_put(FASE2_PIN, 0);
-    gpio_put(FASE3_PIN, 0);
-    gpio_put(FASE4_PIN, 0);
+void play_win(void) {
+    all_leds_blink(4);
+    // audio_play(GANHOU_DATA, GANHOU_LENGTH);
 }
 
-// Roda o motor uma volta completa (512 passos) com animação
-// direction: 1 = horário, -1 = anti-horário
-void runMotorOneRevolution(int direction) {
-    uint16_t color = (direction == 1) ? 0x07E0 : 0xF800;
-    int animFrame = 0;
-
-    for (int i = 0; i < 512; i++) {
-        if (direction == 1)
-            stepMotorCW();
-        else
-            stepMotorCCW();
-
-        if (i % 32 == 0) {
-            if (direction == 1)
-                drawAnimFrame(animFrame, color);
-            else
-                drawAnimFrame(3 - animFrame, color);
-
-            animFrame = (animFrame + 1) % 4;
+// ─── ISR dos botões ───────────────────────────────────────────────────────────
+void gpio_callback(uint gpio, uint32_t events) {
+    if (events & GPIO_IRQ_EDGE_RISE) {
+        for (int i = 0; i < NUM_COLORS; i++) {
+            if (gpio == BTN_PINS[i]) {
+                btn_flag = i;
+                break;
+            }
         }
     }
-
-    stopMotor();
-    clearAnim();
 }
 
-int main() {
+// ─── Inicialização ────────────────────────────────────────────────────────────
+void setup(void) {
     stdio_init_all();
 
-    //### LCD
-    LCD_initDisplay();
-    LCD_setRotation(SCREEN_ROTATION);
+    for (int i = 0; i < NUM_COLORS; i++) {
+        gpio_init(LED_PINS[i]);
+        gpio_set_dir(LED_PINS[i], GPIO_OUT);
+        gpio_put(LED_PINS[i], 0);
 
-    //### TOUCH
-    configure_touch();
+        gpio_init(BTN_PINS[i]);
+        gpio_set_dir(BTN_PINS[i], GPIO_IN);
+        gpio_pull_down(BTN_PINS[i]);
 
-    //### GFX
-    gfx_init();
-    gfx_clear();
+        gpio_set_irq_enabled_with_callback(
+            BTN_PINS[i],
+            GPIO_IRQ_EDGE_RISE,
+            true,
+            &gpio_callback
+        );
+    }
+}
 
-    //### MOTOR
-    gpio_init(FASE1_PIN);
-    gpio_set_dir(FASE1_PIN, GPIO_OUT);
-    gpio_init(FASE2_PIN);
-    gpio_set_dir(FASE2_PIN, GPIO_OUT);
-    gpio_init(FASE3_PIN);
-    gpio_set_dir(FASE3_PIN, GPIO_OUT);
-    gpio_init(FASE4_PIN);
-    gpio_set_dir(FASE4_PIN, GPIO_OUT);
-
-    //### TELA
-    gfx_setTextSize(2);
-    gfx_setTextColor(0x07E0);
-    gfx_drawText(40, 10, "Motor de Passos");
-    drawButtons();
+// ─── Main ─────────────────────────────────────────────────────────────────────
+int main(void) {
+    setup();
+    // set_sys_clock_khz(176000, true);
+    // pwm_audio_init();
 
     while (true) {
-        int touchRawX, touchRawY;
-        int screenTouchX = 0;
-        int screenTouchY = 0;
+        if (state == SHOW_SEQUENCE) {
+            sleep_ms(600);
+            for (int i = 0; i < phase; i++) {
+                play_color(sequence[i]);
+            }
+            input_index = 0;
+            btn_flag    = -1;
+            state       = WAIT_INPUT;
 
-        int touchDetected = readPoint(&touchRawX, &touchRawY);
+        } else if (state == WAIT_INPUT) {
+            if (btn_flag != -1) {
+                int pressed = btn_flag;
+                btn_flag    = -1;
 
-        if (touchDetected) {
-            gfx_touchTransform(SCREEN_ROTATION,
-                               touchRawX, touchRawY,
-                               &screenTouchX, &screenTouchY);
+                play_color(pressed);
 
-            // Checa se tocou no botão CW (seta da direita)
-            if (screenTouchX >= CW_BTN_X && screenTouchX <= CW_BTN_X + CW_BTN_W &&
-                screenTouchY >= CW_BTN_Y && screenTouchY <= CW_BTN_Y + CW_BTN_H) {
-                runMotorOneRevolution(1);
+                if (pressed == sequence[input_index]) {
+                    input_index++;
+                    if (input_index == phase) {
+                        if (phase == MAX_SEQ) {
+                            play_win();
+                            phase = 1;
+                        } else {
+                            phase++;
+                        }
+                        state = SHOW_SEQUENCE;
+                    }
+                } else {
+                    state = GAME_OVER;
+                }
             }
 
-            // Checa se tocou no botão CCW (seta da esquerda)
-            if (screenTouchX >= CCW_BTN_X && screenTouchX <= CCW_BTN_X + CCW_BTN_W &&
-                screenTouchY >= CCW_BTN_Y && screenTouchY <= CCW_BTN_Y + CCW_BTN_H) {
-                runMotorOneRevolution(-1);
-            }
+        } else if (state == GAME_OVER) {
+            play_lose();
+            phase       = 1;
+            input_index = 0;
+            state       = SHOW_SEQUENCE;
         }
-
-        sleep_ms(10);
     }
-
-    return 0;
 }
