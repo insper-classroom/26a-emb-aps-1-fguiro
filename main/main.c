@@ -26,10 +26,14 @@
 // ── Sequência ────────────────────────────────────────────────────────────────
 #define MAX_SEQ 5
 
-static int sequence[MAX_SEQ];
+static int sequence[2][MAX_SEQ];
 static void sequence_init(void) {
-    static const int fixed[MAX_SEQ] = {0, 1, 2, 3, 0};
-    for (int i = 0; i < MAX_SEQ; i++) sequence[i] = fixed[i];
+    static const int fixed[2][MAX_SEQ] = {
+        {0, 1, 2, 3, 0}, // P1
+        {2, 3, 1, 0, 2}, // P2
+    };
+    for (int p = 0; p < 2; p++)
+        for (int i = 0; i < MAX_SEQ; i++) sequence[p][i] = fixed[p][i];
 }
 
 // ── Áudio PWM ────────────────────────────────────────────────────────────────
@@ -93,15 +97,22 @@ static void lcd_clear(void) {
     gfx_fillRect(0, 0, SCREEN_W, SCREEN_H, ILI9341_BLACK);
 }
 
-static void lcd_idle(void) {
+static void lcd_menu(int selected) {
     lcd_clear();
-    lcd_centered(SCREEN_H / 2 - 30, "GENIUS",         ILI9341_GREEN, 4);
-    lcd_centered(SCREEN_H / 2 + 20, "Pressione PLAY", ILI9341_WHITE, 2);
+    lcd_centered(20, "GENIUS", ILI9341_GREEN, 4);
+    // 1 jogador: destacado em verde se selecionado, branco se não
+    uint16_t c1 = (selected == 1) ? ILI9341_GREEN  : ILI9341_WHITE;
+    uint16_t c2 = (selected == 2) ? ILI9341_YELLOW : ILI9341_WHITE;
+    lcd_centered(SCREEN_H / 2 - 10, "[Verde]  1 Jogador",  c1, 2);
+    lcd_centered(SCREEN_H / 2 + 25, "[Verm.]  2 Jogadores", c2, 2);
+    lcd_centered(SCREEN_H - 24, "PLAY para confirmar", ILI9341_WHITE, 1);
 }
 
-static void lcd_waiting(int score, int phase) {
+static void lcd_waiting(int player, int score, int phase) {
     lcd_clear();
-    lcd_centered(SCREEN_H / 2 - 20, "Sua vez!", ILI9341_CYAN, 3);
+    char who[16];
+    snprintf(who, sizeof(who), "Vez do P%d!", player);
+    lcd_centered(SCREEN_H / 2 - 20, who, player == 1 ? ILI9341_CYAN : ILI9341_YELLOW, 3);
     gfx_setTextSize(2);
     gfx_setTextColor(ILI9341_WHITE);
     char buf[32];
@@ -109,12 +120,34 @@ static void lcd_waiting(int score, int phase) {
     gfx_drawText(8, SCREEN_H - 24, buf);
 }
 
-static void lcd_result(const char *msg, uint16_t color, int score) {
+static void lcd_final(int s1, int s2, int nplayers) {
     lcd_clear();
-    lcd_centered(SCREEN_H / 2 - 30, msg, color, 3);
-    char buf[24];
-    snprintf(buf, sizeof(buf), "Pontos: %d", score);
-    lcd_centered(SCREEN_H / 2 + 20, buf, ILI9341_WHITE, 2);
+    lcd_centered(SCREEN_H / 2 - 50, "GAME OVER", ILI9341_RED, 3);
+    char buf[32];
+    if (nplayers == 2) {
+        snprintf(buf, sizeof(buf), "P1: %d", s1);
+        lcd_centered(SCREEN_H / 2 + 0,  buf, ILI9341_CYAN,   2);
+        snprintf(buf, sizeof(buf), "P2: %d", s2);
+        lcd_centered(SCREEN_H / 2 + 30, buf, ILI9341_YELLOW, 2);
+    } else {
+        snprintf(buf, sizeof(buf), "Pontos: %d", s1);
+        lcd_centered(SCREEN_H / 2 + 10, buf, ILI9341_WHITE, 2);
+    }
+}
+
+static void lcd_win(int s1, int s2, int nplayers) {
+    lcd_clear();
+    lcd_centered(SCREEN_H / 2 - 50, "YOU WIN!", ILI9341_GREEN, 3);
+    char buf[32];
+    if (nplayers == 2) {
+        snprintf(buf, sizeof(buf), "P1: %d", s1);
+        lcd_centered(SCREEN_H / 2 + 0,  buf, ILI9341_CYAN,   2);
+        snprintf(buf, sizeof(buf), "P2: %d", s2);
+        lcd_centered(SCREEN_H / 2 + 30, buf, ILI9341_YELLOW, 2);
+    } else {
+        snprintf(buf, sizeof(buf), "Pontos: %d", s1);
+        lcd_centered(SCREEN_H / 2 + 10, buf, ILI9341_WHITE, 2);
+    }
 }
 
 // ── Timeout ──────────────────────────────────────────────────────────────────
@@ -124,14 +157,20 @@ static void timeout_reset(void) { timeout_start = time_us_64(); }
 static bool timeout_expired(void) { return (time_us_64() - timeout_start) >= INPUT_TIMEOUT_US; }
 
 // ── Estados ──────────────────────────────────────────────────────────────────
-typedef enum { ST_IDLE, ST_SHOW, ST_INPUT, ST_WIN, ST_LOSE } State;
+typedef enum { ST_MENU, ST_IDLE, ST_SHOW, ST_INPUT, ST_WIN, ST_LOSE } State;
 
 static volatile int  btn_color = -1;
 static volatile bool btn_play  = false;
-static State state     = ST_IDLE;
-static int   phase     = 1;
-static int   input_idx = 0;
-static int   score     = 0;
+static State state = ST_MENU;
+
+static int num_players = 1;  // 1 ou 2
+static int menu_sel    = 1;  // seleção atual no menu
+
+// Estado por jogador
+static int phase[2]     = {1, 1};
+static int input_idx[2] = {0, 0};
+static int score[2]     = {0, 0};
+static int cur = 0;
 
 // ── LEDs ─────────────────────────────────────────────────────────────────────
 static void led_on(int c)  { gpio_put(LED_PINS[c], 1); }
@@ -189,27 +228,58 @@ static void setup(void) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 int main(void) {
     setup();
-    lcd_idle();
+    lcd_menu(menu_sel);
 
     while (true) {
         switch (state) {
-        case ST_IDLE:
+
+        // ── Menu de seleção de modo ──────────────────────────────────────────
+        case ST_MENU:
+            if (btn_color != -1) {
+                int c = btn_color;
+                btn_color = -1;
+                if (c == 0) menu_sel = 1;       // botão verde = 1 jogador
+                if (c == 1) menu_sel = 2;       // botão vermelho = 2 jogadores
+                lcd_menu(menu_sel);
+            }
             if (btn_play) {
                 btn_play = false;
-                phase = 1; input_idx = 0; score = 0;
-                audio_play(PLAY_DATA, PLAY_DATA_LENGTH);
-                audio_wait();
-                state = ST_SHOW;
+                num_players = menu_sel;
+                state = ST_IDLE;
             }
             break;
 
+        // ── Aguarda PLAY para iniciar ────────────────────────────────────────
+        case ST_IDLE: {
+            lcd_clear();
+            lcd_centered(SCREEN_H / 2 - 30, "GENIUS",         ILI9341_GREEN, 4);
+            char sub[24];
+            snprintf(sub, sizeof(sub), "%d Jogador%s - PLAY",
+                     num_players, num_players == 2 ? "es" : "");
+            lcd_centered(SCREEN_H / 2 + 20, sub, ILI9341_WHITE, 2);
+
+            btn_play = false;
+            btn_color = -1;
+            while (!btn_play) tight_loop_contents();
+            btn_play = false;
+
+            cur = 0;
+            phase[0] = phase[1] = 1;
+            input_idx[0] = input_idx[1] = 0;
+            score[0] = score[1] = 0;
+            audio_play(PLAY_DATA, PLAY_DATA_LENGTH);
+            audio_wait();
+            state = ST_SHOW;
+            break;
+        }
+
         case ST_SHOW:
             sleep_ms(600);
-            for (int i = 0; i < phase; i++) show_color(sequence[i]);
-            input_idx = 0;
+            for (int i = 0; i < phase[cur]; i++) show_color(sequence[cur][i]);
+            input_idx[cur] = 0;
             btn_color = -1;
             btn_play  = false;
-            lcd_waiting(score, phase);
+            lcd_waiting(cur + 1, score[cur], phase[cur]);
             timeout_reset();
             state = ST_INPUT;
             break;
@@ -227,14 +297,20 @@ int main(void) {
                 audio_wait();
                 led_off(pressed);
 
-                if (pressed == sequence[input_idx]) {
-                    input_idx++;
-                    if (input_idx == phase) {
-                        score++;
-                        if (phase == MAX_SEQ) {
-                            state = ST_WIN;
+                if (pressed == sequence[cur][input_idx[cur]]) {
+                    input_idx[cur]++;
+                    if (input_idx[cur] == phase[cur]) {
+                        score[cur]++;
+                        if (phase[cur] == MAX_SEQ) {
+                            if (num_players == 1 || cur == 1) {
+                                state = ST_WIN;
+                            } else {
+                                cur = 1;
+                                state = ST_SHOW;
+                            }
                         } else {
-                            phase++;
+                            phase[cur]++;
+                            cur = (num_players == 2) ? 1 - cur : 0;
                             state = ST_SHOW;
                         }
                     } else {
@@ -248,20 +324,22 @@ int main(void) {
 
         case ST_WIN:
             all_blink(4);
-            lcd_result("YOU WIN!", ILI9341_GREEN, score);
+            lcd_win(score[0], score[1], num_players);
             audio_play(GANHOU_DATA, GANHOU_DATA_LENGTH);
             audio_wait();
-            state = ST_IDLE;
-            lcd_idle();
+            state = ST_MENU;
+            menu_sel = num_players;
+            lcd_menu(menu_sel);
             break;
 
         case ST_LOSE:
             all_blink(4);
-            lcd_result("GAME OVER", ILI9341_RED, score);
+            lcd_final(score[0], score[1], num_players);
             audio_play(PERDEU_DATA, PERDEU_DATA_LENGTH);
             audio_wait();
-            state = ST_IDLE;
-            lcd_idle();
+            state = ST_MENU;
+            menu_sel = num_players;
+            lcd_menu(menu_sel);
             break;
         }
     }
