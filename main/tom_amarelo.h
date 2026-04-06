@@ -1,7 +1,10 @@
+#ifndef TOM_AMARELO_H
+#define TOM_AMARELO_H
+
 /*    File tom_amarelo.wav
  *    Sample rate 11000 Hz
  */
-#define AMARELO_DATA_LENGTH 6600 
+#define AMARELO_DATA_LENGTH 6600
 
 uint8_t AMARELO_DATA[] = {
     129,146,165,182,199,214,227,237,246,251,254,254,251,246,238,227,
@@ -418,3 +421,5 @@ uint8_t AMARELO_DATA[] = {
     130,129,128,128,127,126,126,126,125,125,125,125,125,125,125,125,
     126,126,126,126,127,127,127,127,128    
 };
+
+#endif

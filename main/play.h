@@ -1,7 +1,10 @@
+#ifndef PLAY_H
+#define PLAY_H
+
 /*    File play.wav
  *    Sample rate 11000 Hz
  */
-#define PLAY_DATA_LENGTH 27872 
+#define PLAY_DATA_LENGTH 27872
 
 uint8_t PLAY_DATA[] = {
     100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,
@@ -1748,3 +1751,5 @@ uint8_t PLAY_DATA[] = {
     100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,
     100    
 };
+
+#endif

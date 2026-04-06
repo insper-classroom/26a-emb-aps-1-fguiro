@@ -1,7 +1,10 @@
+#ifndef TOM_VERMELHO_H
+#define TOM_VERMELHO_H
+
 /*    File tom_vermelho.wav
  *    Sample rate 11000 Hz
  */
-#define VERMELHO_DATA_LENGTH 6600 
+#define VERMELHO_DATA_LENGTH 6600
 
 uint8_t VERMELHO_DATA[] = {
     129,143,159,174,189,202,214,225,235,242,249,252,255,254,252,248,
@@ -418,3 +421,5 @@ uint8_t VERMELHO_DATA[] = {
     126,126,125,125,125,125,124,124,124,124,124,125,125,125,125,125,
     126,126,126,126,127,127,127,127,128    
 };
+
+#endif

@@ -1,7 +1,10 @@
+#ifndef TOM_VERDE_H
+#define TOM_VERDE_H
+
 /*    File tom_verde.wav
  *    Sample rate 11000 Hz
  */
-#define VERDE_DATA_LENGTH 6600 
+#define VERDE_DATA_LENGTH 6600
 
 uint8_t VERDE_DATA[] = {
     129,150,174,195,214,230,242,250,254,253,248,239,226,208,189,167,
@@ -418,3 +421,5 @@ uint8_t VERDE_DATA[] = {
     129,129,130,130,130,131,130,130,130,130,129,129,128,128,127,127,
     127,126,126,126,126,127,127,127,128    
 };
+
+#endif

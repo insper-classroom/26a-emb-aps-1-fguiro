@@ -1,7 +1,10 @@
+#ifndef TOM_AZUL_H
+#define TOM_AZUL_H
+
 /*    File tom_azul.wav
  *    Sample rate 11000 Hz
  */
-#define AZUL_DATA_LENGTH 6600 
+#define AZUL_DATA_LENGTH 6600
 
 uint8_t AZUL_DATA[] = {
     128,139,151,162,174,185,195,205,214,223,230,237,242,247,250,253,
@@ -418,3 +421,5 @@ uint8_t AZUL_DATA[] = {
     126,126,126,125,125,125,125,125,125,125,125,125,125,125,125,125,
     126,126,126,126,126,127,127,127,127    
 };
+
+#endif

@@ -1,7 +1,10 @@
+#ifndef GANHOU_H
+#define GANHOU_H
+
 /*    File ganhou.wav
  *    Sample rate 11000 Hz
  */
-#define GANHOU_DATA_LENGTH 12407 
+#define GANHOU_DATA_LENGTH 12407
 
 uint8_t GANHOU_DATA[] = {
     124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,
@@ -781,3 +784,5 @@ uint8_t GANHOU_DATA[] = {
     124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,
     124,124,124,124,124,124,124,124    
 };
+
+#endif

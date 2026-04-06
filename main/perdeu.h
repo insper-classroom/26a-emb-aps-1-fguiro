@@ -1,7 +1,10 @@
+#ifndef PERDEU_H
+#define PERDEU_H
+
 /*    File perdeu.wav
  *    Sample rate 11000 Hz
  */
-#define PERDEU_DATA_LENGTH 20688 
+#define PERDEU_DATA_LENGTH 20688
 
 uint8_t PERDEU_DATA[] = {
     130,130,130,130,130,130,130,130,130,130,130,130,130,130,130,130,
@@ -1299,3 +1302,5 @@ uint8_t PERDEU_DATA[] = {
     130,130,130,130,130,130,130,130,130,130,130,130,130,130,130,130,
     130    
 };
+
+#endif

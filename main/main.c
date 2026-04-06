@@ -26,14 +26,13 @@
 // ── Sequência ────────────────────────────────────────────────────────────────
 #define MAX_SEQ 5
 
-static int sequence[2][MAX_SEQ];
-static void sequence_init(void) {
+static void sequence_init(int seq[2][MAX_SEQ]) {
     static const int fixed[2][MAX_SEQ] = {
         {0, 1, 2, 3, 0}, // P1
         {2, 3, 1, 0, 2}, // P2
     };
     for (int p = 0; p < 2; p++)
-        for (int i = 0; i < MAX_SEQ; i++) sequence[p][i] = fixed[p][i];
+        for (int i = 0; i < MAX_SEQ; i++) seq[p][i] = fixed[p][i];
 }
 
 // ── Áudio PWM ────────────────────────────────────────────────────────────────
@@ -43,19 +42,23 @@ static void sequence_init(void) {
 static const uint8_t  *COLOR_DATA[NUM_COLORS] = {VERDE_DATA, VERMELHO_DATA, AZUL_DATA, AMARELO_DATA};
 static const uint32_t  COLOR_LEN[NUM_COLORS]  = {VERDE_DATA_LENGTH, VERMELHO_DATA_LENGTH, AZUL_DATA_LENGTH, AMARELO_DATA_LENGTH};
 
-static const uint8_t    *audio_buf = NULL;
-static uint32_t          audio_len = 0;
-static volatile uint32_t audio_pos = 0;
-static volatile bool     audio_done = true;
+// Usado pela IRQ do timer de áudio — precisa ser global
+typedef struct {
+    const uint8_t    *buf;
+    uint32_t          len;
+    volatile uint32_t pos;
+    volatile bool     done;
+} AudioState;
+static AudioState g_audio = {NULL, 0, 0, true};
 
 static bool audio_timer_cb(struct repeating_timer *t) {
     (void)t;
-    if (audio_done) return true;
-    if (audio_pos < audio_len)
-        pwm_set_gpio_level(BUZZER_PIN, audio_buf[audio_pos++]);
+    if (g_audio.done) return true;
+    if (g_audio.pos < g_audio.len)
+        pwm_set_gpio_level(BUZZER_PIN, g_audio.buf[g_audio.pos++]);
     else {
         pwm_set_gpio_level(BUZZER_PIN, 128);
-        audio_done = true;
+        g_audio.done = true;
     }
     return true;
 }
@@ -74,15 +77,15 @@ static void audio_init(void) {
 }
 
 static void audio_play(const uint8_t *data, uint32_t len) {
-    audio_done = true;
-    audio_buf  = data;
-    audio_len  = len;
-    audio_pos  = 0;
-    audio_done = false;
+    g_audio.done = true;
+    g_audio.buf  = data;
+    g_audio.len  = len;
+    g_audio.pos  = 0;
+    g_audio.done = false;
 }
 
 static void audio_wait(void) {
-    while (!audio_done) tight_loop_contents();
+    while (!g_audio.done) tight_loop_contents();
 }
 
 // ── LCD helpers ──────────────────────────────────────────────────────────────
@@ -152,9 +155,8 @@ static void lcd_win(int s1, int s2, int nplayers) {
 
 // ── Timeout ──────────────────────────────────────────────────────────────────
 #define INPUT_TIMEOUT_US (7 * 1000000ULL)
-static uint64_t timeout_start = 0;
-static void timeout_reset(void) { timeout_start = time_us_64(); }
-static bool timeout_expired(void) { return (time_us_64() - timeout_start) >= INPUT_TIMEOUT_US; }
+static void timeout_reset(uint64_t *start) { *start = time_us_64(); }
+static bool timeout_expired(uint64_t start) { return (time_us_64() - start) >= INPUT_TIMEOUT_US; }
 
 // ── Estados ──────────────────────────────────────────────────────────────────
 typedef enum { ST_MENU, ST_IDLE, ST_SHOW, ST_INPUT, ST_WIN, ST_LOSE } State;
@@ -195,9 +197,11 @@ static void show_color(int c) {
 // ── ISR ──────────────────────────────────────────────────────────────────────
 static void gpio_cb(uint gpio, uint32_t events) {
     if (!(events & GPIO_IRQ_EDGE_RISE)) return;
-    if (gpio == PIN_BTN_PLAY_PAUSE) { btn_play = true; return; }
-    for (int i = 0; i < NUM_COLORS; i++)
-        if (gpio == BTN_PINS[i]) { btn_color = i; return; }
+    if (gpio == PIN_BTN_PLAY_PAUSE) { btn_play = true;  return; }
+    if (gpio == PIN_BTN_VERDE)      { btn_color = 0;    return; }
+    if (gpio == PIN_BTN_VERMELHO)   { btn_color = 1;    return; }
+    if (gpio == PIN_BTN_AMARELO)    { btn_color = 2;    return; }
+    if (gpio == PIN_BTN_AZUL)       { btn_color = 3;    return; }
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -208,7 +212,6 @@ static void setup(void) {
     gfx_init();
     gfx_clear();
     audio_init();
-    sequence_init();
 
     for (int i = 0; i < NUM_COLORS; i++) {
         gpio_init(LED_PINS[i]);
@@ -227,7 +230,10 @@ static void setup(void) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 int main(void) {
+    int sequence[2][MAX_SEQ];
+    uint64_t timeout_start = 0;
     setup();
+    sequence_init(sequence);
     lcd_menu(menu_sel);
 
     while (true) {
@@ -280,12 +286,12 @@ int main(void) {
             btn_color = -1;
             btn_play  = false;
             lcd_waiting(cur + 1, score[cur], phase[cur]);
-            timeout_reset();
+            timeout_reset(&timeout_start);
             state = ST_INPUT;
             break;
 
         case ST_INPUT:
-            if (timeout_expired()) {
+            if (timeout_expired(timeout_start)) {
                 state = ST_LOSE;
                 break;
             }
@@ -314,7 +320,7 @@ int main(void) {
                             state = ST_SHOW;
                         }
                     } else {
-                        timeout_reset();
+                        timeout_reset(&timeout_start);
                     }
                 } else {
                     state = ST_LOSE;
