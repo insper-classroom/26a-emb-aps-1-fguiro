@@ -1,3 +1,3 @@
 add_subdirectory(gfx)
 add_subdirectory(ili9341)
-add_subdirectory(touch_resistive)
+# add_subdirectory(touch_resistive)
