@@ -15,8 +15,10 @@
 #define PIN_BTN_AMARELO  28
 #define PIN_BTN_AZUL     26
 
+#define PIN_BTN_PLAY_PAUSE 10
+
 // Buzzer
-#define BUZZER_PIN  10
+#define BUZZER_PIN  11
 
 // Arrays (definidos aqui como static para evitar múltipla definição)
 static const uint LED_PINS[NUM_COLORS] = {PIN_LED_VERDE, PIN_LED_VERMELHO, PIN_LED_AMARELO, PIN_LED_AZUL};
