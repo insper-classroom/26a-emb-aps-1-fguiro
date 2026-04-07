@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
@@ -27,12 +28,9 @@
 #define MAX_SEQ 5
 
 static void sequence_init(int seq[2][MAX_SEQ]) {
-    static const int fixed[2][MAX_SEQ] = {
-        {0, 1, 2, 3, 0}, // P1
-        {2, 3, 1, 0, 2}, // P2
-    };
     for (int p = 0; p < 2; p++)
-        for (int i = 0; i < MAX_SEQ; i++) seq[p][i] = fixed[p][i];
+        for (int i = 0; i < MAX_SEQ; i++)
+            seq[p][i] = rand() % NUM_COLORS;
 }
 
 // ── Áudio PWM ────────────────────────────────────────────────────────────────
@@ -207,6 +205,7 @@ static void gpio_cb(uint gpio, uint32_t events) {
 // ── Setup ────────────────────────────────────────────────────────────────────
 static void setup(void) {
     stdio_init_all();
+    srand((unsigned int)time_us_64());
     LCD_initDisplay();
     LCD_setRotation(SCREEN_ROTATION);
     gfx_init();
@@ -233,7 +232,6 @@ int main(void) {
     int sequence[2][MAX_SEQ];
     uint64_t timeout_start = 0;
     setup();
-    sequence_init(sequence);
     lcd_menu(menu_sel);
 
     while (true) {
@@ -273,6 +271,7 @@ int main(void) {
             phase[0] = phase[1] = 1;
             input_idx[0] = input_idx[1] = 0;
             score[0] = score[1] = 0;
+            sequence_init(sequence);
             audio_play(PLAY_DATA, PLAY_DATA_LENGTH);
             audio_wait();
             state = ST_SHOW;
