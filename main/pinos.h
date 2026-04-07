@@ -4,21 +4,21 @@
 #define NUM_COLORS 4
 
 // LEDs
-#define PIN_LED_VERDE    7
-#define PIN_LED_VERMELHO 5
-#define PIN_LED_AMARELO  4
-#define PIN_LED_AZUL     6
+#define PIN_LED_VERDE    11
+#define PIN_LED_VERMELHO 8
+#define PIN_LED_AMARELO  10
+#define PIN_LED_AZUL     13
 
 // Botões
-#define PIN_BTN_VERDE    22
-#define PIN_BTN_VERMELHO 27
-#define PIN_BTN_AMARELO  28
-#define PIN_BTN_AZUL     26
+#define PIN_BTN_VERDE    21
+#define PIN_BTN_VERMELHO 28
+#define PIN_BTN_AMARELO  9
+#define PIN_BTN_AZUL     12
 
-#define PIN_BTN_PLAY_PAUSE 10
+#define PIN_BTN_PLAY_PAUSE 4
 
 // Buzzer
-#define BUZZER_PIN  11
+#define BUZZER_PIN  7
 
 // Arrays (definidos aqui como static para evitar múltipla definição)
 static const uint LED_PINS[NUM_COLORS] = {PIN_LED_VERDE, PIN_LED_VERMELHO, PIN_LED_AMARELO, PIN_LED_AZUL};
