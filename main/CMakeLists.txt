@@ -9,12 +9,15 @@ target_include_directories(pico_emb PRIVATE
 target_link_libraries(pico_emb
     pico_stdlib
     hardware_gpio
-    hardware_pwm
     hardware_timer
+    hardware_pwm
     hardware_clocks
     hardware_spi
     ili9341
     gfx
 )
+
+pico_enable_stdio_usb(pico_emb 1)
+pico_enable_stdio_uart(pico_emb 0)
 
 pico_add_extra_outputs(pico_emb)
