@@ -121,8 +121,8 @@ static void lcd_menu(int selected) {
 
 static void lcd_sua_vez(int player, int score, int phase) {
     lcd_clear();
-    char who[16];
     if (player > 0) {
+        char who[16];
         snprintf(who, sizeof(who), "Vez do P%d!", player);
         lcd_centered(SCREEN_H / 2 - 40, who,
                      player == 1 ? ILI9341_CYAN : ILI9341_YELLOW, 2);
